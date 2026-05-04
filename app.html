@@ -1537,31 +1537,53 @@ function logout(){
 }
 
 // ── PASSWORD SCREEN LOGIC ──
-const SENHA_CORRETA = 'QUITA2026';
+// ═══════════════════════════════════════
+// NOVO SISTEMA DE VALIDAÇÃO POR PADRÃO
+// Aceita senhas no formato: QUITA-XXXXXX-XXXXXX
+// onde X = letra maiúscula (A-Z) ou número (0-9)
+// ═══════════════════════════════════════
+
+const PADRAO_SENHA = /^QUITA-[A-Z0-9]{6}-[A-Z0-9]{6}$/;
+
 let tentativas = 0;
 
 function verificarSenha(){
   if(tentativas >= 5){
-    document.getElementById('senha-erro').textContent='⏳ Muitas tentativas. Aguarde 30 segundos.';
-    document.getElementById('senha-erro').style.display='block';
+    document.getElementById('senha-erro').textContent = '⏳ Muitas tentativas. Aguarde 30 segundos.';
+    document.getElementById('senha-erro').style.display = 'block';
     return;
   }
-  const val=document.getElementById('senha-input').value.trim().toUpperCase();
-  if(val===SENHA_CORRETA.toUpperCase()){
-    sessionStorage.setItem('quita_auth','1');
-    const tela=document.getElementById('tela-senha');
-    tela.style.transition='opacity .4s'; tela.style.opacity='0';
-    setTimeout(()=>{ tela.style.display='none'; abrirApp(3); },400);
+  
+  const val = document.getElementById('senha-input').value.trim().toUpperCase();
+  
+  if(PADRAO_SENHA.test(val)){
+    sessionStorage.setItem('quita_auth', '1');
+    sessionStorage.setItem('quita_senha', val);
+    
+    const tela = document.getElementById('tela-senha');
+    tela.style.transition = 'opacity .4s'; 
+    tela.style.opacity = '0';
+    setTimeout(()=>{ 
+      tela.style.display = 'none'; 
+      abrirApp(3); 
+    }, 400);
   } else {
     tentativas++;
-    const err=document.getElementById('senha-erro');
-    err.textContent='❌ Senha incorreta. Verifique o e-mail recebido após a compra.';
-    err.style.display='block';
-    const inp=document.getElementById('senha-input');
-    inp.style.borderColor='rgba(251,113,133,0.5)'; inp.value='';
+    const err = document.getElementById('senha-erro');
+    err.textContent = '❌ Senha inválida. Verifique o e-mail recebido após a compra.';
+    err.style.display = 'block';
+    const inp = document.getElementById('senha-input');
+    inp.style.borderColor = 'rgba(251,113,133,0.5)'; 
+    inp.value = '';
     inp.classList.add('shake');
-    setTimeout(()=>{ inp.classList.remove('shake'); inp.style.borderColor='rgba(255,255,255,0.08)'; },400);
-    if(tentativas>=5) setTimeout(()=>{ tentativas=0; err.style.display='none'; },30000);
+    setTimeout(()=>{ 
+      inp.classList.remove('shake'); 
+      inp.style.borderColor = 'rgba(255,255,255,0.08)'; 
+    }, 400);
+    if(tentativas >= 5) setTimeout(()=>{ 
+      tentativas = 0; 
+      err.style.display = 'none'; 
+    }, 30000);
   }
 }
 
