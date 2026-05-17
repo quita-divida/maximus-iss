@@ -1840,8 +1840,14 @@ async function n3AtualizarTaxas() {
 
     results.forEach(({ tipo, data }) => {
       if (data && data[0] && data[0].valor != null) {
-        const taxaMensal = parseFloat(data[0].valor) / 100; // vem em % ex: "15.3" → 0.153
-        TAXAS_MENSAIS[tipo] = taxaMensal;
+        const rawVal = parseFloat(data[0].valor);
+        // BCB SGS retorna % ao mês (ex: "15.30" = 15,30%/mês → 0.1530)
+        // Sanidade: taxas mensais de crédito ficam entre 0,1% e 25%
+        if (rawVal >= 0.1 && rawVal <= 25) {
+          const taxaMensal = rawVal / 100;
+          TAXAS_MENSAIS[tipo] = taxaMensal;
+        }
+        // Se fora do range, mantém fallback — dado suspeito
         if (!dataRef) dataRef = data[0].data; // "dd/MM/yyyy"
         atualizou = true;
       }
@@ -1885,12 +1891,14 @@ function calcDivida(l) {
   const taxa   = TAXAS_MENSAIS[l.tipo]  || 0.06;
   const prescM = PRESCRICAO_MESES[l.tipo] || 60;
   const [dMin, dMax] = DESCONTO_RANGE[l.tipo] || [0.30, 0.60];
-  const corrigido     = orig * Math.pow(1 + taxa, meses);
+  // Cap de meses para evitar overflow (30 anos = 360 meses)
+  const mesesSafe = Math.min(meses, 360);
+  const corrigido = orig * Math.pow(1 + taxa, mesesSafe);
   const ofertaIdeal   = corrigido * (1 - (dMin + dMax) / 2);
   const ofertaMin     = corrigido * (1 - dMax);
   const ofertaMax     = corrigido * (1 - dMin);
   const prescrita     = meses >= prescM;
-  const mesRestante   = prescM - meses;
+  const mesRestante   = Math.max(0, prescM - meses);
   const proxima       = !prescrita && mesRestante <= 6;
   let score = 0;
   if (l.tipo === 'Cartão de crédito' || l.tipo === 'Cheque especial') score += 40;
@@ -1952,6 +1960,17 @@ function n3DelLinha(id) {
 function n3UpdField(id, field, value) {
   const l = n3Linhas.find(l => l.id === id);
   if (!l) return;
+  // Sanidade: meses máx 360 (30 anos), valor máx R$10M
+  if (field === 'meses') {
+    const m = parseInt(value) || 0;
+    if (m > 360) { value = '360'; }
+    if (m < 0)   { value = '0'; }
+  }
+  if (field === 'valor') {
+    const v = parseFloat(value) || 0;
+    if (v > 10000000) { value = '10000000'; } // cap R$10M
+    if (v < 0)        { value = '0'; }
+  }
   l[field] = value;
   n3SaveStorage();
   // Atualiza apenas as células calculadas dessa linha — sem re-render total
@@ -2335,6 +2354,23 @@ function mostrarErroLogin(input, erroEl, msg) {
   input.classList.add('shake');
   setTimeout(() => { input.classList.remove('shake'); input.style.borderColor = ''; }, 500);
 }
+
+// Limpa dados corrompidos do localStorage (versão anterior)
+(function() {
+  try {
+    const d = localStorage.getItem('quita_plan_v2');
+    if (d) {
+      const arr = JSON.parse(d);
+      // Sanitiza dados existentes
+      const clean = arr.map(l => ({
+        ...l,
+        meses: Math.min(parseInt(l.meses) || 0, 360),
+        valor: Math.min(parseFloat(l.valor) || 0, 10000000)
+      }));
+      localStorage.setItem('quita_plan_v2', JSON.stringify(clean));
+    }
+  } catch(e) { localStorage.removeItem('quita_plan_v2'); }
+})();
 
 // Autodetecta senha na URL (vinda do obrigado.html via ?s=QUITA-...)
 document.addEventListener("DOMContentLoaded", function() {
